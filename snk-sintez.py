@@ -142,7 +142,8 @@ def main( dealerName):
     make_loger()
     log.info('         '+dealerName )
     if  download( dealerName):
-        convert2csv( dealerName )
+        pass
+        #convert2csv( dealerName )
     priceName = dealerName+'.csv'
     if os.path.exists( priceName   ) : shutil.copy2( priceName,    'c://AV_PROM/prices/' + dealerName +'/'+priceName)
     if os.path.exists( 'python.log') : shutil.copy2( 'python.log', 'c://AV_PROM/prices/' + dealerName +'/python.log')
@@ -153,4 +154,4 @@ if __name__ == '__main__':
     myName = os.path.basename(os.path.splitext(sys.argv[0])[0])
     mydir    = os.path.dirname (sys.argv[0])
     print(mydir, myName)
-    main( 'modulit')
+    main( 'snk-syntez')
