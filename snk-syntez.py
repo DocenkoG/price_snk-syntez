@@ -250,7 +250,7 @@ def main( dealerName):
     log.info('         '+dealerName )
     csvFName   = ('csv_'+dealerName+'.csv').lower()
 
-    if  True: #download( dealerName):
+    if  download( dealerName):
         convert2csv( dealerName, csvFName)
     if os.path.exists( csvFName    ) : shutil.copy2( csvFName ,    'c://AV_PROM/prices/' + dealerName +'/'+csvFName )
     if os.path.exists( 'python.log') : shutil.copy2( 'python.log', 'c://AV_PROM/prices/' + dealerName +'/python.log')
