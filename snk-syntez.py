@@ -6,57 +6,164 @@ import logging.config
 import sys
 import configparser
 import time
-# import elittech_downloader
 import shutil
+import openpyxl                       # Для .xlsx
+#import xlrd                          # для .xls
+from   price_tools import getCellXlsx, getCell, quoted, dump_cell, currencyType, subInParentheses
 import csv
 
 
 
-def convert2csv( dealerName ):
-    inFile  = open( 'new_'+dealerName +'.csv', 'r', newline='')
-    outFile = open(        dealerName +'.csv', 'w', newline='')
-    csvReader = csv.DictReader(inFile)
-    csvWriter = csv.DictWriter(outFile, fieldnames=[
-        'бренд',
-        'группа',
-        'подгруппа',
-        'код',
-        'код производителя',
-        'наименование',
-        'описание',
-        'закупка',
-        'продажа',
-        'валюта',
-        'наличие',
-        '?'])
+def getXlsxString(sh, i, in_columns_j):
+    impValues = {}
+    for item in in_columns_j.keys() :
+        j = in_columns_j[item]
+        if item in ('закупка','продажа','цена') :
+            if getCellXlsx(row=i, col=j, isDigit='N', sheet=sh).find('Звоните') >=0 :
+                impValues[item] = '0.1'
+            else :
+                impValues[item] = getCellXlsx(row=i, col=j, isDigit='Y', sheet=sh)
+            #print(sh, i, sh.cell( row=i, column=j).value, sh.cell(row=i, column=j).number_format, currencyType(sh, i, j))
+        elif item == 'валюта_по_формату':
+            impValues[item] = currencyType(row=i, col=j, sheet=sh)
+        else:
+            impValues[item] = getCellXlsx(row=i, col=j, isDigit='N', sheet=sh)
+    return impValues
 
-    for k in range (0, len(csvReader.fieldnames)):
-        csvReader.fieldnames[k] = csvReader.fieldnames[k].lower()
-    print(csvReader.fieldnames)
+
+
+def convert2csv( dealerName, csvFName ):
+    cfgFName   = ('cfg_'+dealerName+'.cfg').lower()
+    fileNameIn = ('new_'+dealerName+'.xlsx').lower()
+    basicNamelist, basic = config_read( cfgFName, 'basic' )
+
+    book = openpyxl.load_workbook(filename = fileNameIn, read_only=False, keep_vba=False, data_only=False)  # xlsx
+    sheet = book.worksheets[0]                                                                              # xlsx
+    log.info('-------------------  '+sheet.title +'  ----------')                                           # xlsx
+#   sheetNames = book.get_sheet_names()                                                                     # xlsx
+
+#   book = xlrd.open_workbook( fileNameIn.encode('cp1251'), formatting_info=True)                       # xls
+#   sheet = book.sheets()[0]                                                                            # xls
+#   log.info('-------------------  '+sheet.name +'  ----------')                                        # xls
+
+    out_cols, out_template = config_read(cfgFName, 'cols_out')
+    in_cols,  in_cols_j    = config_read(cfgFName, 'cols_in')
+    brands,   discount     = config_read(cfgFName, 'discount')
+    for k in in_cols_j.keys():
+        in_cols_j[k] = int(in_cols_j[k])
+    for k in discount.keys():
+        discount[k] = (100 - int(discount[k]))/100
+
+    outFile = open( csvFName, 'w', newline='')
+    csvWriter = csv.DictWriter(outFile, fieldnames=out_cols )
     csvWriter.writeheader()
-    recOut = {}
-    for recIn in csvReader:
-        recOut['бренд']        = recIn['бренд']
-        recOut['группа']       = recIn['группа']
-        recOut['подгруппа']    = recIn['подгруппа']
-        recOut['код']          = recIn['наименование']
-        recOut['код производителя'] = recIn['код производителя']
-        recOut['наименование'] = recIn['бренд']+' '+recIn['наименование']+' '+recIn['описание']
-        recOut['описание']     = recIn['бренд']+' '+recIn['наименование']+' '+recIn['описание']+' Код продавца: '+recIn['артикул']+' код производителя: '+recIn['код производителя']
-        recOut['продажа']      = recIn['розничная']
+
+    '''                                            # Блок проверки свойств для распознавания групп      XLSX                                  
+    for i in range(2393, 2397):                                                         
+        i_last = i
+        ccc = sheet.cell( row=i, column=in_cols_j['группа'] )
+        print(i, ccc.value)
+        print(ccc.font.name, ccc.font.sz, ccc.font.b, ccc.font.i, ccc.font.color.rgb, '------', ccc.fill.fgColor.rgb)
+        print('------')
+    '''
+    ssss    = []
+    brand   = ''
+    grp     = ''
+    subgrp1 = ''
+    subgrp2 = ''
+    brand_koeft = 1
+    recOut  ={}
+
+#   for i in range(1, sheet.nrows) :                                    # xls
+    for i in range(1, sheet.max_row +1) :                               # xlsx
+        i_last = i
         try:
-            recOut['закупка']  = float(recIn['розничная']) * 0.7
-        except:
-            recOut['закупка']  = 0.1
-        #
-        recOut['валюта']       = recIn['валюта']
-        recOut['наличие']      = recIn['наличие']
-        recOut['?']            = '?'
-        #print(recOut)
-        csvWriter.writerow(recOut)
-    log.info('Обработано '+ str(csvReader.line_num) +'строк.')
-    inFile.close()
+            ccc = sheet.cell( row=i, column=in_cols_j['группа'] )
+            ccc2= sheet.cell( row=i, column=in_cols_j['цена'] )
+            if   ccc.value == None:                                     # Пустая строка
+                 pass
+            elif ccc.font.color.rgb == 'FFFFFFFF':                      # Бренд
+                brand=ccc.value
+                grp = ''
+                subgrp1 = ''
+                subgrp2 = ''
+                try:
+                    brand_koeft = discount[brand.lower()]
+                except Exception as e:
+                    log.error('Exception: <' + str(e) + '> Ошибка назначения скидки в файле конфигурации' )
+                    brand_koeft = 1
+            elif ccc.fill.fgColor.rgb == 'FF746FEE':                    # Группа
+                grp = ccc.value
+                try:
+                    num = float(grp[ :grp.find(' ')])
+                except Exception as e:
+                    grp = ccc.value
+                else:
+                    grp = grp[ grp.find(' ')+1:]
+                subgrp1 = ''
+                subgrp2 = ''
+            elif ccc.fill.fgColor.rgb == 'FFE6E6E6':                    # Подгруппа-1
+                subgrp1 = ccc.value
+                try:
+                    num = float(subgrp1[ :subgrp1.find(' ')])
+                except Exception as e:
+                    subgrp1 = ccc.value
+                else:
+                    subgrp1 = subgrp1[ subgrp1.find(' ')+1:]
+                subgrp2 = ''
+                print(subgrp1)
+            elif ccc.fill.fgColor.rgb == 'FFFAFAFA':                    # Подгруппа-2
+                subgrp2 = ccc.value
+            elif ccc2.value == None:                                    # Пустая строка
+                pass
+                #print( 'Пустая строка. i=', i )
+            elif ccc.font.b == False:                                   # Обычная строка
+                impValues = getXlsxString(sheet, i, in_cols_j)
+                for outColName in out_template.keys() :
+                    shablon = out_template[outColName]
+                    for key in impValues.keys():
+                        if shablon.find(key) >= 0 :
+                            shablon = shablon.replace(key, impValues[key])
+                    if (outColName == 'закупка') and ('*' in shablon) :
+                        vvvv = float( shablon[ :shablon.find('*')     ] )
+                        #print(vvvv)
+                        shablon = str( float(vvvv) * brand_koeft )
+                    recOut[outColName] = shablon
+
+                recOut['бренд'] = brand
+                recOut['группа'] = grp
+                recOut['подгруппа'] = subgrp1+' '+subgrp2
+                csvWriter.writerow(recOut)
+
+            else :                                                      # нераспознана строка
+                log.info('Не распознана строка ' + str(i) + '<' + ccc.value + '>' )
+
+        except Exception as e:
+            if str(e) == "'NoneType' object has no attribute 'rgb'":
+                pass
+            else:
+                log.debug('Exception: <' + str(e) + '> при обработке строки ' + str(i) +'.' )
+
+    log.info('Обработано ' +str(i_last)+ ' строк.')
     outFile.close()
+
+
+
+def config_read( cfgFName, partName ):
+    log.debug('Reading config ' + cfgFName )
+    config = configparser.ConfigParser()
+    keyList = []
+    keyDict = {}
+    if  os.path.exists(cfgFName):     
+        config.read( cfgFName, encoding='utf-8')
+        keyList = config.options(partName)
+        for vName in keyList :
+            if ('' != config.get(partName, vName)) :
+                keyDict[vName] = config.get(partName, vName)
+    else: 
+        log.debug('Нет файла конфигурации '+cfgFName)
+    
+    return keyList, keyDict
 
 
 
@@ -141,11 +248,11 @@ def make_loger():
 def main( dealerName):
     make_loger()
     log.info('         '+dealerName )
-    if  download( dealerName):
-        pass
-        #convert2csv( dealerName )
-    priceName = dealerName+'.csv'
-    if os.path.exists( priceName   ) : shutil.copy2( priceName,    'c://AV_PROM/prices/' + dealerName +'/'+priceName)
+    csvFName   = ('csv_'+dealerName+'.csv').lower()
+
+    if  True: #download( dealerName):
+        convert2csv( dealerName, csvFName)
+    if os.path.exists( csvFName    ) : shutil.copy2( csvFName ,    'c://AV_PROM/prices/' + dealerName +'/'+csvFName )
     if os.path.exists( 'python.log') : shutil.copy2( 'python.log', 'c://AV_PROM/prices/' + dealerName +'/python.log')
     if os.path.exists( 'python.1'  ) : shutil.copy2( 'python.log', 'c://AV_PROM/prices/' + dealerName +'/python.1'  )
 
