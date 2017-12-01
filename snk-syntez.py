@@ -118,6 +118,10 @@ def convert2csv( dealerName, csvFName ):
                 #print( 'Пустая строка. i=', i )
             elif ccc.font.b == False:                                   # Обычная строка
                 impValues = getXlsxString(sheet, i, in_cols_j)
+                impValues['бренд'] = brand
+                impValues['группа'] = grp
+                impValues['подгруппа'] = subgrp1+' '+subgrp2
+
                 for outColName in out_template.keys() :
                     shablon = out_template[outColName]
                     for key in impValues.keys():
@@ -129,9 +133,9 @@ def convert2csv( dealerName, csvFName ):
                         shablon = str( float(vvvv) * brand_koeft )
                     recOut[outColName] = shablon
 
-                recOut['бренд'] = brand
-                recOut['группа'] = grp
-                recOut['подгруппа'] = subgrp1+' '+subgrp2
+#                recOut['бренд'] = brand
+#                recOut['группа'] = grp
+#                recOut['подгруппа'] = subgrp1+' '+subgrp2
                 csvWriter.writerow(recOut)
 
             else :                                                      # нераспознана строка
@@ -212,14 +216,14 @@ def download( dealerName ):
             if DnewPrice != "dummy" :
                 FoldName = 'old_' + dealerName + new_ext                         # Старая копия прайса, для сравнения даты
                 FnewName = 'new_' + dealerName + new_ext                         # Предыдущий прайс, с которым работает макрос
-                if  (not os.path.exists( FnewName)) or new_file_date>os.path.getmtime(FnewName) : 
-                    log.debug( 'Предыдущего прайса нет или он устарел. Копируем новый.' )
+                if  (not os.path.exists( FnewName)) or new_file_date> time.time() -60*60*24*7*3: # период устаревания.   os.path.getmtime(FnewName) : 
+                    log.debug( 'Предыдущего прайса нет или файл поставщика не старый. Копируем его.' )
                     if os.path.exists( FoldName): os.remove( FoldName)
                     if os.path.exists( FnewName): os.rename( FnewName, FoldName)
                     shutil.copy2(DnewPrice, FnewName)
                     retCode = True
                 else:
-                    log.debug( 'Предыдущий прайс не старый, копироавать не надо.' )
+                    log.debug( 'Файл у поставщика старый, копироавать его не надо.' )
                 # Убрать скачанные файлы
                 if  os.path.exists(DnewPrice):  os.remove(DnewPrice)   
             
@@ -245,8 +249,8 @@ def main( dealerName):
     log.info('         '+dealerName )
     csvFName   = ('csv_'+dealerName+'.csv').lower()
 
-    #s  download( dealerName)
-    convert2csv( dealerName, csvFName)
+    if  download( dealerName):
+        convert2csv( dealerName, csvFName)
     if os.path.exists( csvFName    ) : shutil.copy2( csvFName ,    'c://AV_PROM/prices/' + dealerName +'/'+csvFName )
     if os.path.exists( 'python.log') : shutil.copy2( 'python.log', 'c://AV_PROM/prices/' + dealerName +'/python.log')
     if os.path.exists( 'python.1'  ) : shutil.copy2( 'python.log', 'c://AV_PROM/prices/' + dealerName +'/python.1'  )
