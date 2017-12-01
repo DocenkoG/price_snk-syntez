@@ -54,7 +54,7 @@ def convert2csv( dealerName, csvFName ):
     for k in discount.keys():
         discount[k] = (100 - int(discount[k]))/100
 
-    outFile = open( csvFName, 'w', newline='')
+    outFile = open( csvFName, 'w', newline='', encoding='CP1251', errors='replace')
     csvWriter = csv.DictWriter(outFile, fieldnames=out_cols )
     csvWriter.writeheader()
 
@@ -111,7 +111,6 @@ def convert2csv( dealerName, csvFName ):
                 else:
                     subgrp1 = subgrp1[ subgrp1.find(' ')+1:]
                 subgrp2 = ''
-                print(subgrp1)
             elif ccc.fill.fgColor.rgb == 'FFFAFAFA':                    # Подгруппа-2
                 subgrp2 = ccc.value
             elif ccc2.value == None:                                    # Пустая строка
@@ -190,19 +189,15 @@ def download( dealerName ):
                 work_dir = os.getcwd()                                                  
                 os.chdir( os.path.join( pathDwnld ))
                 dir_befo_download = set(os.listdir(os.getcwd()))
-                print(DnewFile)
-                print(new_file)
                 os.system('unzip -oj ' + new_file)
                 os.remove(new_file)   
                 dir_afte_download = set(os.listdir(os.getcwd()))
                 new_files = list( dir_afte_download.difference(dir_befo_download))
-                print(new_files)
                 if len(new_files) == 1 :   
                     new_file = new_files[0]                                             # разархивирован ровно один файл. 
                     new_ext  = os.path.splitext(new_file)[-1]
                     DnewFile = os.path.join( os.getcwd(),new_file)
                     new_file_date = os.path.getmtime(DnewFile)
-                    print(DnewFile)
                     log.debug( 'Файл из архива ' +DnewFile + ' имеет дату ' + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(new_file_date) )     )
                     DnewPrice = DnewFile
                 elif len(new_files) >1 :
@@ -250,8 +245,8 @@ def main( dealerName):
     log.info('         '+dealerName )
     csvFName   = ('csv_'+dealerName+'.csv').lower()
 
-    if  download( dealerName):
-        convert2csv( dealerName, csvFName)
+    #s  download( dealerName)
+    convert2csv( dealerName, csvFName)
     if os.path.exists( csvFName    ) : shutil.copy2( csvFName ,    'c://AV_PROM/prices/' + dealerName +'/'+csvFName )
     if os.path.exists( 'python.log') : shutil.copy2( 'python.log', 'c://AV_PROM/prices/' + dealerName +'/python.log')
     if os.path.exists( 'python.1'  ) : shutil.copy2( 'python.log', 'c://AV_PROM/prices/' + dealerName +'/python.1'  )
