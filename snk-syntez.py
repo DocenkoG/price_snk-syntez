@@ -9,8 +9,9 @@ import time
 import shutil
 import openpyxl                       # Для .xlsx
 #import xlrd                          # для .xls
-from   price_tools import getCellXlsx, getCell, quoted, dump_cell, currencyType, subInParentheses
+from   price_tools import getCellXlsx, getCell, quoted, dump_cell, currencyType, openX, sheetByName
 import csv
+import requests, lxml.html
 
 
 
@@ -32,27 +33,34 @@ def getXlsxString(sh, i, in_columns_j):
 
 
 
-def convert2csv( dealerName, csvFName ):
-    cfgFName   = ('cfg_'+dealerName+'.cfg').lower()
-    fileNameIn = ('new_'+dealerName+'.xlsx').lower()
-    basicNamelist, basic = config_read( cfgFName, 'basic' )
-
-    book = openpyxl.load_workbook(filename = fileNameIn, read_only=False, keep_vba=False, data_only=False)  # xlsx
+def convert2csv( cfg ):
+    csvFName  = cfg.get('basic','filename_out')
+    priceFName= cfg.get('basic','filename_in')
+    sheetName = cfg.get('basic','sheetname')
+    
+    book = openpyxl.load_workbook(filename = priceFName, read_only=False, keep_vba=False, data_only=False)  # xlsx
     sheet = book.worksheets[0]                                                                              # xlsx
     log.info('-------------------  '+sheet.title +'  ----------')                                           # xlsx
 #   sheetNames = book.get_sheet_names()                                                                     # xlsx
 
-#   book = xlrd.open_workbook( fileNameIn.encode('cp1251'), formatting_info=True)                       # xls
+#   book = xlrd.open_workbook( priceFName.encode('cp1251'), formatting_info=True)                       # xls
 #   sheet = book.sheets()[0]                                                                            # xls
 #   log.info('-------------------  '+sheet.name +'  ----------')                                        # xls
 
-    out_cols, out_template = config_read(cfgFName, 'cols_out')
-    in_cols,  in_cols_j    = config_read(cfgFName, 'cols_in')
-    brands,   discount     = config_read(cfgFName, 'discount')
-    for k in in_cols_j.keys():
-        in_cols_j[k] = int(in_cols_j[k])
-    for k in discount.keys():
-        discount[k] = (100 - int(discount[k]))/100
+    out_cols = cfg.options("cols_out")
+    out_template = {}
+    for vName in out_cols :
+         out_template[vName] = cfg.get("cols_out", vName)
+    
+    in_cols = cfg.options("cols_in")
+    in_cols_j = {}
+    for vName in in_cols :
+         in_cols_j[vName] = cfg.getint("cols_in",  vName)
+
+    brands = cfg.options('discount')
+    discount = {}
+    for vName in discount.keys():
+        discount[vName] = (100 - int(cfg.get('discount',vName)))/100
 
     outFile = open( csvFName, 'w', newline='', encoding='CP1251', errors='replace')
     csvWriter = csv.DictWriter(outFile, fieldnames=out_cols )
@@ -152,88 +160,80 @@ def convert2csv( dealerName, csvFName ):
 
 
 
-def config_read( cfgFName, partName ):
-    log.debug('Reading config ' + cfgFName )
-    config = configparser.ConfigParser()
-    keyList = []
-    keyDict = {}
+def download( cfg ):
+    retCode     = False
+    filename_new= cfg.get('download','filename_new')
+    filename_old= cfg.get('download','filename_old')
+    if cfg.has_option('download','login'):    login       = cfg.get('download','login'    )
+    if cfg.has_option('download','password'): password    = cfg.get('download','password' )
+    url_download_page= cfg.get('download','url_download_page'   )
+    url_base         = cfg.get('download','url_base' )
+    headers = {'User-Agent':'Mozilla/5.0 (Windows NT 6.0; rv:14.0) Gecko/20100101 Firefox/14.0.1',
+               'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+               'Accept-Language':'ru-ru,ru;q=0.8,en-us;q=0.5,en;q=0.3',
+               'Accept-Encoding':'gzip, deflate',
+               'Connection':'keep-alive',
+               'DNT':'1'
+              }
+    try:
+        s = requests.Session()
+        r = s.get(url_download_page,  headers = headers)
+        page = lxml.html.fromstring(r.text)
+        for item in page.xpath('//a'):
+            if item.text == u"Полный прайс-лист компании СНК-СИНТЕЗ":
+               #print(item.attrib)
+               url_file = item.get('href')
+        r = s.get(url_base + url_file)
+        log.debug('Загрузка файла %16d bytes   --- code=%d', len(r.content), r.status_code)
+        retCode = True
+    except Exception as e:
+        log.debug('Exception: <' + str(e) + '>')
+
+    if os.path.exists( filename_new) and os.path.exists( filename_old): 
+        os.remove( filename_old)
+        os.rename( filename_new, filename_old)
+    if os.path.exists( filename_new) :
+        os.rename( filename_new, filename_old)
+    f2 = open(filename_new, 'wb')                                  # Теперь записываем файл
+    f2.write(r.content)
+    f2.close()
+    if filename_new[-4:] == '.zip':                                # Архив. Обработка не завершена
+        log.debug( 'Zip-архив. Разархивируем '+ filename_new)
+        dir_befo_download = set(os.listdir(os.getcwd()))
+        os.system('unzip -oj ' + filename_new)
+        dir_afte_download = set(os.listdir(os.getcwd()))
+        new_files = list( dir_afte_download.difference(dir_befo_download))
+        print(new_files)
+    return new_files[0]
+
+
+
+def is_file_fresh(fileName, qty_days):
+    qty_seconds = qty_days *24*60*60 
+    if os.path.exists( fileName):
+        price_datetime = os.path.getmtime(fileName)
+    else:
+        log.error('Не найден файл  '+ fileName)
+        return False
+
+    if price_datetime+qty_seconds < time.time() :
+        file_age = round((time.time()-price_datetime)/24/60/60)
+        log.error('Файл "'+fileName+'" устарел!  Допустимый период '+ str(qty_days)+' дней, а ему ' + str(file_age) )
+        return False
+    else:
+        return True
+
+
+
+def config_read( cfgFName ):
+    cfg = configparser.ConfigParser(inline_comment_prefixes=('#'))
+    if  os.path.exists('private.cfg'):     
+        cfg.read('private.cfg', encoding='utf-8')
     if  os.path.exists(cfgFName):     
-        config.read( cfgFName, encoding='utf-8')
-        keyList = config.options(partName)
-        for vName in keyList :
-            if ('' != config.get(partName, vName)) :
-                keyDict[vName] = config.get(partName, vName)
+        cfg.read( cfgFName, encoding='utf-8')
     else: 
         log.debug('Нет файла конфигурации '+cfgFName)
-    
-    return keyList, keyDict
-
-
-
-def download( dealerName ):
-    pathDwnld = './tmp'
-    pathPython2 = 'c:/Python27/python.exe'
-    retCode = False
-    fUnitName = os.path.join( dealerName +'_unittest.py')
-    if  not os.path.exists(fUnitName):
-        log.debug( 'Отсутствует юниттест для загрузки прайса ' + fUnitName)
-    else:
-        dir_befo_download = set(os.listdir(pathDwnld))
-        os.system( fUnitName)                                                           # Вызов unittest'a
-        dir_afte_download = set(os.listdir(pathDwnld))
-        new_files = list( dir_afte_download.difference(dir_befo_download))
-        if len(new_files) == 1 :   
-            new_file = new_files[0]                                                     # загружен ровно один файл. 
-            new_ext  = os.path.splitext(new_file)[-1]
-            DnewFile = os.path.join( pathDwnld,new_file)
-            new_file_date = os.path.getmtime(DnewFile)
-            log.info( 'Скачанный файл ' +DnewFile + ' имеет дату ' + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(new_file_date) ) )
-            if new_ext == '.zip':                                                       # Архив. Обработка не завершена
-                log.debug( 'Zip-архив. Разархивируем.')
-                work_dir = os.getcwd()                                                  
-                os.chdir( os.path.join( pathDwnld ))
-                dir_befo_download = set(os.listdir(os.getcwd()))
-                os.system('unzip -oj ' + new_file)
-                os.remove(new_file)   
-                dir_afte_download = set(os.listdir(os.getcwd()))
-                new_files = list( dir_afte_download.difference(dir_befo_download))
-                if len(new_files) == 1 :   
-                    new_file = new_files[0]                                             # разархивирован ровно один файл. 
-                    new_ext  = os.path.splitext(new_file)[-1]
-                    DnewFile = os.path.join( os.getcwd(),new_file)
-                    new_file_date = os.path.getmtime(DnewFile)
-                    log.debug( 'Файл из архива ' +DnewFile + ' имеет дату ' + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(new_file_date) )     )
-                    DnewPrice = DnewFile
-                elif len(new_files) >1 :
-                    log.debug( 'В архиве не единственный файл. Надо разбираться.')
-                    DnewPrice = "dummy"
-                else:
-                    log.debug( 'Нет новых файлов после разархивации. Загляни в папку юниттеста поставщика.')
-                    DnewPrice = "dummy"
-                os.chdir(work_dir)
-            elif new_ext in ( '.csv', '.htm', '.xls', '.xlsx'):
-                DnewPrice = DnewFile                                             # Имя скачанного прайса
-            if DnewPrice != "dummy" :
-                FoldName = 'old_' + dealerName + new_ext                         # Старая копия прайса, для сравнения даты
-                FnewName = 'new_' + dealerName + new_ext                         # Предыдущий прайс, с которым работает макрос
-                if  (not os.path.exists( FnewName)) or new_file_date> time.time() -60*60*24*7*3: # период устаревания.   os.path.getmtime(FnewName) : 
-                    log.debug( 'Предыдущего прайса нет или файл поставщика не старый. Копируем его.' )
-                    if os.path.exists( FoldName): os.remove( FoldName)
-                    if os.path.exists( FnewName): os.rename( FnewName, FoldName)
-                    shutil.copy2(DnewPrice, FnewName)
-                    retCode = True
-                else:
-                    log.debug( 'Файл у поставщика старый, копироавать его не надо.' )
-                # Убрать скачанные файлы
-                if  os.path.exists(DnewPrice):  os.remove(DnewPrice)   
-            
-        elif len(new_files) == 0 :        
-            log.debug( 'Не удалось скачать файл прайса ')
-        else:
-            log.debug( 'Скачалось несколько файлов. Надо разбираться ...')
-
-    return retCode
-
+    return cfg
 
 
 
@@ -244,20 +244,39 @@ def make_loger():
 
 
 
-def main( dealerName):
-    make_loger()
-    log.info('         '+dealerName )
-    csvFName   = ('csv_'+dealerName+'.csv').lower()
+def processing(cfgFName):
+    log.info('----------------------- Processing '+cfgFName )
+    cfg = config_read(cfgFName)
+    filename_out  = cfg.get('basic','filename_out')
+    filename_in= cfg.get('basic','filename_in')
+    
+    if cfg.has_section('download'):
+        result = download(cfg)
+    if is_file_fresh( filename_in, int(cfg.get('basic','срок годности'))):
+        #os.system( dealerName + '_converter_xlsx.xlsm')
+        convert2csv(cfg)
+    folderName = os.path.basename(os.getcwd())
+    if os.path.exists( filename_out): shutil.copy2( filename_out, 'c://AV_PROM/prices/' +folderName+'/'+filename_out)
+    if os.path.exists( 'python.log'): shutil.copy2( 'python.log', 'c://AV_PROM/prices/' +folderName+'/python.log')
+    if os.path.exists( 'python.1'  ): shutil.copy2( 'python.log', 'c://AV_PROM/prices/' +folderName+'/python.1'  )
+    
 
-    if  download( dealerName):
-        convert2csv( dealerName, csvFName)
-    if os.path.exists( csvFName    ) : shutil.copy2( csvFName ,    'c://AV_PROM/prices/' + dealerName +'/'+csvFName )
-    if os.path.exists( 'python.log') : shutil.copy2( 'python.log', 'c://AV_PROM/prices/' + dealerName +'/python.log')
-    if os.path.exists( 'python.1'  ) : shutil.copy2( 'python.log', 'c://AV_PROM/prices/' + dealerName +'/python.1'  )
+
+def main( dealerName):
+    """ Обработка прайсов выполняется согласно файлов конфигурации.
+    Для этого в текущей папке должны быть файлы конфигурации, описывающие
+    свойства файла и правила обработки. По одному конфигу на каждый 
+    прайс или раздел прайса со своими правилами обработки
+    """
+    make_loger()
+    log.info('          '+dealerName )
+    for cfgFName in os.listdir("."):
+        if cfgFName.startswith("cfg") and cfgFName.endswith(".cfg"):
+            processing(cfgFName)
 
 
 if __name__ == '__main__':
     myName = os.path.basename(os.path.splitext(sys.argv[0])[0])
     mydir    = os.path.dirname (sys.argv[0])
     print(mydir, myName)
-    main( 'snk-syntez')
+    main( myName)
