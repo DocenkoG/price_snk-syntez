@@ -1,4 +1,4 @@
-# -*- coding: UTF-8 -*-
+    # -*- coding: UTF-8 -*-
 import os
 import os.path
 import logging
@@ -59,8 +59,9 @@ def convert2csv( cfg ):
 
     brands = cfg.options('discount')
     discount = {}
-    for vName in discount.keys():
+    for vName in brands :
         discount[vName] = (100 - int(cfg.get('discount',vName)))/100
+        print(vName, discount[vName])
 
     outFile = open( csvFName, 'w', newline='', encoding='CP1251', errors='replace')
     csvWriter = csv.DictWriter(outFile, fieldnames=out_cols )
@@ -96,6 +97,7 @@ def convert2csv( cfg ):
                 subgrp1 = ''
                 subgrp2 = ''
                 try:
+                    print(brand)
                     brand_koeft = discount[brand.lower()]
                 except Exception as e:
                     log.error('Exception: <' + str(e) + '> Ошибка назначения скидки в файле конфигурации' )
@@ -202,9 +204,11 @@ def download( cfg ):
         dir_befo_download = set(os.listdir(os.getcwd()))
         os.system('unzip -oj ' + filename_new)
         dir_afte_download = set(os.listdir(os.getcwd()))
-        new_files = list( dir_afte_download.difference(dir_befo_download))
-        print(new_files)
-    return new_files[0]
+        new_files  = list( dir_afte_download.difference(dir_befo_download))
+        filename_in= cfg.get('basic','filename_in')
+        os.remove( filename_in)
+        os.rename( new_files[0], filename_in)
+    return True
 
 
 
