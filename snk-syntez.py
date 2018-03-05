@@ -206,7 +206,7 @@ def download( cfg ):
         dir_afte_download = set(os.listdir(os.getcwd()))
         new_files  = list( dir_afte_download.difference(dir_befo_download))
         filename_in= cfg.get('basic','filename_in')
-        os.remove( filename_in)
+        if os.path.exists(filename_in): os.remove( filename_in)
         os.rename( new_files[0], filename_in)
     return True
 
