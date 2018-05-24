@@ -199,14 +199,15 @@ def download( cfg ):
     f2 = open(filename_new, 'wb')                                  # Теперь записываем файл
     f2.write(r.content)
     f2.close()
+
     if filename_new[-4:] == '.zip':                                # Архив. Обработка не завершена
         log.debug( 'Zip-архив. Разархивируем '+ filename_new)
-        dir_befo_download = set(os.listdir(os.getcwd()))
-        os.system('unzip -oj ' + filename_new)
-        dir_afte_download = set(os.listdir(os.getcwd()))
-        new_files  = list( dir_afte_download.difference(dir_befo_download))
         filename_in= cfg.get('basic','filename_in')
         if os.path.exists(filename_in): os.remove( filename_in)
+        dir_befo_unzip = set(os.listdir(os.getcwd()))
+        os.system('unzip -oj ' + filename_new)
+        dir_afte_unzip = set(os.listdir(os.getcwd()))
+        new_files  = list( dir_afte_unzip.difference(dir_befo_unzip))
         os.rename( new_files[0], filename_in)
     return True
 
@@ -251,14 +252,16 @@ def make_loger():
 def processing(cfgFName):
     log.info('----------------------- Processing '+cfgFName )
     cfg = config_read(cfgFName)
-    filename_out  = cfg.get('basic','filename_out')
-    filename_in= cfg.get('basic','filename_in')
+    filename_out = cfg.get('basic',   'filename_out')
+    filename_new = cfg.get('download','filename_new')
     
     if cfg.has_section('download'):
         result = download(cfg)
-    if is_file_fresh( filename_in, int(cfg.get('basic','срок годности'))):
+    if (result == True) or is_file_fresh( filename_new, int(cfg.get('basic','срок годности'))):
         #os.system( dealerName + '_converter_xlsx.xlsm')
         convert2csv(cfg)
+    else:
+        print('Else', result)
     folderName = os.path.basename(os.getcwd())
     if os.path.exists( filename_out): shutil.copy2( filename_out, 'c://AV_PROM/prices/' +folderName+'/'+filename_out)
     if os.path.exists( 'python.log'): shutil.copy2( 'python.log', 'c://AV_PROM/prices/' +folderName+'/python.log')
