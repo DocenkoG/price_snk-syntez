@@ -1,4 +1,4 @@
-    # -*- coding: UTF-8 -*-
+# -*- coding: UTF-8 -*-
 import os
 import os.path
 import logging
@@ -253,12 +253,13 @@ def download( cfg ):
             driver = webdriver.Firefox(ffprofile)
         driver.implicitly_wait(30)
         
-        driver.get(url_lk)
+#       driver.get(url_lk)
+        driver.get("https://snk-s.ru/download")
+        time.sleep(14)
+#       driver.find_element_by_xpath("//div[@id='master-wrapper-content']/div[2]/div/div[2]/div/div[2]/div[3]/a/span[2]").click()
+#       time.sleep(14)
+        driver.find_element_by_xpath("//div[@id='master-wrapper-content']/div[2]/div/div[2]/div/div/div[3]/a/span[2]").click()
         time.sleep(4)
-        driver.find_element_by_xpath("//div[@id='master-wrapper-content']/div[2]/div/div[2]/div/div/div[3]/a/span[2]").click()
-        time.sleep(14)
-        driver.find_element_by_xpath("//div[@id='master-wrapper-content']/div[2]/div/div[2]/div/div/div[3]/a/span[2]").click()
-        time.sleep(14)
         driver.quit()
 
     except Exception as e:
