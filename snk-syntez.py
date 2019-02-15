@@ -248,13 +248,14 @@ def download( cfg ):
                 ",application/xv+xml" +
                 ",application/excel")
         if os.name == 'posix':
-            driver = webdriver.Firefox(ffprofile, executable_path=r'/usr/local/Cellar/geckodriver/0.19.1/bin/geckodriver')
+#           driver = webdriver.Firefox(ffprofile, executable_path=r'/usr/local/Cellar/geckodriver/0.19.1/bin/geckodriver')
+            driver = webdriver.Firefox(ffprofile, executable_path=r'/usr/local/bin/geckodriver')
         elif os.name == 'nt':
             driver = webdriver.Firefox(ffprofile)
         driver.implicitly_wait(30)
         
 #       driver.get(url_lk)
-        driver.get("https://snk-s.ru/download")
+        driver.get("https://snk-s.ru/DevPartnerCommon/DownloadFile/17132")
         time.sleep(14)
 #       driver.find_element_by_xpath("//div[@id='master-wrapper-content']/div[2]/div/div[2]/div/div[2]/div[3]/a/span[2]").click()
 #       time.sleep(14)
@@ -366,27 +367,31 @@ def make_loger():
 def processing(cfgFName):
     log.info('----------------------- Processing '+cfgFName )
     cfg = config_read(cfgFName)
-    filename_out = cfg.get('basic',   'filename_out')
-    filename_new = cfg.get('download','filename_new')
+    filename_out = cfg.get('basic','filename_out')
+    filename_in  = cfg.get('basic','filename_in')
     
-    if cfg.has_section('download'):
-        result = download(cfg)
-    if (result == True) or is_file_fresh( filename_new, int(cfg.get('basic','срок годности'))):
-        #os.system( dealerName + '_converter_xlsx.xlsm')
-        convert2csv(cfg)
-    else:
-        print('Else', result)
-    
+    convert2csv(cfg)   
 
 
-def main( dealerName):
+def main(dealerName):
     """ Обработка прайсов выполняется согласно файлов конфигурации.
     Для этого в текущей папке должны быть файлы конфигурации, описывающие
     свойства файла и правила обработки. По одному конфигу на каждый 
     прайс или раздел прайса со своими правилами обработки
     """
     make_loger()
-    log.info('          '+dealerName )
+    log.info('          ' + dealerName)
+
+    if  os.path.exists('getting.cfg'):
+        cfg = config_read('getting.cfg')
+        filename_new = cfg.get('basic','filename_new')
+
+        rc_download = False
+        if cfg.has_section('download'):
+            rc_download = download(cfg)
+        if not(rc_download==True or is_file_fresh( filename_new, int(cfg.get('basic','срок годности')))):
+            return False
+
     for cfgFName in os.listdir("."):
         if cfgFName.startswith("cfg") and cfgFName.endswith(".cfg"):
             processing(cfgFName)
