@@ -389,7 +389,7 @@ def main(dealerName):
         rc_download = False
         if cfg.has_section('download'):
             rc_download = download(cfg)
-        if not(rc_download==True or is_file_fresh( filename_new, int(cfg.get('basic','срок годности')))):
+        if not(rc_download==True or is_file_fresh( filename_new, int(cfg.get('basic','срок годности')) + 1)):
             return False
 
     for cfgFName in os.listdir("."):
