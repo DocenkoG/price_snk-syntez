@@ -153,6 +153,8 @@ def convert2csv( cfg ):
                 impValues['бренд'] = brand
                 impValues['группа'] = grp
                 impValues['подгруппа'] = subgrp1+' '+subgrp2
+                impValues['описание'] = impValues['описание'].encode('cp1251', errors='replace').decode('cp1251')
+                impValues['код_'] = impValues['код_'].encode('cp1251', errors='replace').decode('cp1251')
 
                 for outColName in out_template.keys() :
                     shablon = out_template[outColName]
