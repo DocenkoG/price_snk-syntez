@@ -9,7 +9,7 @@ import time
 import shutil
 import openpyxl                       # Для .xlsx
 #import xlrd                          # для .xls
-from   price_tools import getCellXlsx, getCell, quoted, dump_cell, currencyType, openX, sheetByName
+from   price_tools import getCellXlsx, getCell, quoted, dump_cell, currencyTypeX, openX, sheetByName
 import csv
 import requests, lxml.html
 
@@ -26,7 +26,10 @@ def getXlsxString(sh, i, in_columns_j):
                 impValues[item] = getCellXlsx(row=i, col=j, isDigit='Y', sheet=sh)
             #print(sh, i, sh.cell( row=i, column=j).value, sh.cell(row=i, column=j).number_format, currencyType(sh, i, j))
         elif item == 'валюта_по_формату':
-            impValues[item] = currencyType(row=i, col=j, sheet=sh)
+            if getCellXlsx(row=i, col=j, isDigit='N', sheet=sh).find('Звоните') >= 0:
+                impValues[item] = 'USD'
+            else:
+                impValues[item] = currencyTypeX(row=i, col=j, sheet=sh)
         else:
             impValues[item] = getCellXlsx(row=i, col=j, isDigit='N', sheet=sh)
     return impValues
@@ -34,10 +37,9 @@ def getXlsxString(sh, i, in_columns_j):
 
 
 def convert2csv( cfg ):
-    csvFName  = cfg.get('basic','filename_out')
     priceFName= cfg.get('basic','filename_in')
     sheetName = cfg.get('basic','sheetname')
-    
+
     book = openpyxl.load_workbook(filename = priceFName, read_only=False, keep_vba=False, data_only=False)  # xlsx
     sheet = book.worksheets[0]                                                                              # xlsx
     log.info('-------------------  '+sheet.title +'  ----------')                                           # xlsx
@@ -63,9 +65,29 @@ def convert2csv( cfg ):
         discount[vName] = (100 - int(cfg.get('discount',vName)))/100
         print(vName, discount[vName])
 
-    outFile = open( csvFName, 'w', newline='', encoding='CP1251', errors='replace')
-    csvWriter = csv.DictWriter(outFile, fieldnames=out_cols )
-    csvWriter.writeheader()
+#    outFile = open( csvFName, 'w', newline='', encoding='CP1251', errors='replace')
+#    csvWriter = csv.DictWriter(outFile, fieldnames=out_cols )
+#    csvWriter.writeheader()
+
+    outFileUSD = False
+    outFileEUR = False
+    outFileRUR = False
+    if cfg.has_option('basic','filename_out_RUR'):
+        csvFfileNameRUR = cfg.get('basic', 'filename_out_RUR')
+        outFileRUR = open(csvFfileNameRUR, 'w', newline='')
+        csvWriterRUR = csv.DictWriter(outFileRUR, fieldnames=cfg.options('cols_out'))
+        csvWriterRUR.writeheader()
+    if cfg.has_option('basic', 'filename_out_USD'):
+        csvFfileNameUSD = cfg.get('basic', 'filename_out_USD')
+        outFileUSD = open(csvFfileNameUSD, 'w', newline='')
+        csvWriterUSD = csv.DictWriter(outFileUSD, fieldnames=cfg.options('cols_out'))
+        csvWriterUSD.writeheader()
+    if cfg.has_option('basic', 'filename_out_EUR'):
+        csvFfileNameEUR = cfg.get('basic', 'filename_out_EUR')
+        outFileEUR = open(csvFfileNameEUR, 'w', newline='')
+        csvWriterEUR = csv.DictWriter(outFileEUR, fieldnames=cfg.options('cols_out'))
+        csvWriterEUR.writeheader()
+
 
     '''                                            # Блок проверки свойств для распознавания групп      XLSX                                  
     for i in range(2393, 2397):                                                         
@@ -146,10 +168,19 @@ def convert2csv( cfg ):
 #                recOut['бренд'] = brand
 #                recOut['группа'] = grp
 #                recOut['подгруппа'] = subgrp1+' '+subgrp2
-                csvWriter.writerow(recOut)
+#                csvWriter.writerow(recOut)
 
             else :                                                      # нераспознана строка
                 log.info('Не распознана строка ' + str(i) + '<' + ccc.value + '>' )
+
+            if recOut['валюта'] == 'RUR':
+                csvWriterRUR.writerow(recOut)
+            elif (recOut['валюта'] == 'USD') or (recOut['валюта'] == ''):
+                csvWriterUSD.writerow(recOut)
+            elif recOut['валюта'] == 'EUR':
+                csvWriterEUR.writerow(recOut)
+            else:
+                log.error('нераспознана валюта "%s" для товара "%s"', recOut['валюта'], recOut['код производителя'])
 
         except Exception as e:
             if str(e) == "'NoneType' object has no attribute 'rgb'":
@@ -158,7 +189,12 @@ def convert2csv( cfg ):
                 log.debug('Exception: <' + str(e) + '> при обработке строки ' + str(i) +'.' )
 
     log.info('Обработано ' +str(i_last)+ ' строк.')
-    outFile.close()
+    if outFileRUR:
+        outFileRUR.close()
+    if outFileUSD:
+        outFileUSD.close()
+    if outFileEUR:
+        outFileEUR.close()
 
 
 
@@ -364,15 +400,6 @@ def make_loger():
 
 
 
-def processing(cfgFName):
-    log.info('----------------------- Processing '+cfgFName )
-    cfg = config_read(cfgFName)
-    filename_out = cfg.get('basic','filename_out')
-    filename_in  = cfg.get('basic','filename_in')
-    
-    convert2csv(cfg)   
-
-
 def main(dealerName):
     """ Обработка прайсов выполняется согласно файлов конфигурации.
     Для этого в текущей папке должны быть файлы конфигурации, описывающие
@@ -394,7 +421,8 @@ def main(dealerName):
 
     for cfgFName in os.listdir("."):
         if cfgFName.startswith("cfg") and cfgFName.endswith(".cfg"):
-            processing(cfgFName)
+            cfg = config_read(cfgFName)
+            convert2csv(cfg)
 
 
 if __name__ == '__main__':

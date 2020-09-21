@@ -119,14 +119,35 @@ def subInParentheses( sourceString):
     return key
 
 
-
-def currencyType(sheet, rowx, colx):
+def currencyTypeX(row, col, sheet):
     '''
     Функция анализирует "формат ячейки" таблицы excel, является ли он "денежным"
     и какая валюта указана в этом формате.
     Распознаются не все валюты и способы их описания.
     '''
-    c = sheet.cell(rowx, colx)
+    fmt_str = sheet.cell(row=row, column=col).number_format
+    if ('\u20bd' in fmt_str or
+        'р' in fmt_str):
+        val = 'RUR'
+    elif ('\xa3' in fmt_str) or (fmt_str.find('GBP')>=0):
+        val = 'GBP'
+    elif (chr(8364) in fmt_str) or (fmt_str.find('EUR')>=0):
+        val = 'EUR'
+    elif (fmt_str.find('USD')>=0) or (fmt_str.find('[$$')>=0) :
+        val = 'USD'
+    else:
+        val = ''
+    return val
+
+
+
+def currencyType(row, col, sheet):
+    '''
+    Функция анализирует "формат ячейки" таблицы excel, является ли он "денежным"
+    и какая валюта указана в этом формате.
+    Распознаются не все валюты и способы их описания.
+    '''
+    c = sheet.cell(row, col)
     xf = sheet.book.xf_list[c.xf_index]
     fmt_obj = sheet.book.format_map[xf.format_key]
     fmt_str = fmt_obj.format_str
