@@ -19,7 +19,7 @@ def getXlsxString(sh, i, in_columns_j):
     impValues = {}
     for item in in_columns_j.keys() :
         j = in_columns_j[item]
-        if item in ('закупка','продажа','цена') :
+        if item in ('закупка','продажа','цена1') :
             if getCellXlsx(row=i, col=j, isDigit='N', sheet=sh).find('Звоните') >=0 :
                 impValues[item] = '0.1'
             else :
@@ -98,63 +98,25 @@ def convert2csv( cfg ):
         print('------')
     '''
     ssss    = []
-    brand   = ''
-    grp     = ''
-    subgrp1 = ''
-    subgrp2 = ''
     brand_koeft = 1
     recOut  ={}
 
 #   for i in range(1, sheet.nrows) :                                    # xls
-    for i in range(1, sheet.max_row +1) :                               # xlsx
+    for i in range(2, sheet.max_row +1) :                               # xlsx
         i_last = i
         try:
-            ccc = sheet.cell( row=i, column=in_cols_j['группа'] )
-            ccc2= sheet.cell( row=i, column=in_cols_j['цена'] )
+            ccc= sheet.cell( row=i, column=in_cols_j['цена1'] )
             if   ccc.value == None:                                     # Пустая строка
                  pass
-            elif ccc.font.color.rgb == 'FFFFFFFF':                      # Бренд
-                brand=ccc.value
-                grp = ''
-                subgrp1 = ''
-                subgrp2 = ''
+            else:                                   # Обычная строка
+                impValues = getXlsxString(sheet, i, in_cols_j)
+                impValues['описание'] = impValues['описание'].encode('cp1251', errors='replace').decode('cp1251')
+                impValues['код_'] = impValues['код_'].encode('cp1251', errors='replace').decode('cp1251')
                 try:
-                    print(brand)
-                    brand_koeft = discount[brand.lower()]
+                    brand_koeft = discount[impValues['бренд'].lower()]
                 except Exception as e:
                     log.error('Exception: <' + str(e) + '> Ошибка назначения скидки в файле конфигурации' )
                     brand_koeft = 1
-            elif ccc.fill.fgColor.rgb == 'FF746FEE':                    # Группа
-                grp = ccc.value
-                try:
-                    num = float(grp[ :grp.find(' ')])
-                except Exception as e:
-                    grp = ccc.value
-                else:
-                    grp = grp[ grp.find(' ')+1:]
-                subgrp1 = ''
-                subgrp2 = ''
-            elif ccc.fill.fgColor.rgb == 'FFE6E6E6':                    # Подгруппа-1
-                subgrp1 = ccc.value
-                try:
-                    num = float(subgrp1[ :subgrp1.find(' ')])
-                except Exception as e:
-                    subgrp1 = ccc.value
-                else:
-                    subgrp1 = subgrp1[ subgrp1.find(' ')+1:]
-                subgrp2 = ''
-            elif ccc.fill.fgColor.rgb == 'FFFAFAFA':                    # Подгруппа-2
-                subgrp2 = ccc.value
-            elif ccc2.value == None:                                    # Пустая строка
-                pass
-                #print( 'Пустая строка. i=', i )
-            elif ccc.font.b == False:                                   # Обычная строка
-                impValues = getXlsxString(sheet, i, in_cols_j)
-                impValues['бренд'] = brand
-                impValues['группа'] = grp
-                impValues['подгруппа'] = subgrp1+' '+subgrp2
-                impValues['описание'] = impValues['описание'].encode('cp1251', errors='replace').decode('cp1251')
-                impValues['код_'] = impValues['код_'].encode('cp1251', errors='replace').decode('cp1251')
 
                 for outColName in out_template.keys() :
                     shablon = out_template[outColName]
@@ -167,15 +129,7 @@ def convert2csv( cfg ):
                         shablon = str( float(vvvv) * brand_koeft )
                     recOut[outColName] = shablon
 
-#                recOut['бренд'] = brand
-#                recOut['группа'] = grp
-#                recOut['подгруппа'] = subgrp1+' '+subgrp2
-#                csvWriter.writerow(recOut)
-
-            else :                                                      # нераспознана строка
-                log.info('Не распознана строка ' + str(i) + '<' + ccc.value + '>' )
-
-            if recOut['валюта'] == 'RUR':
+            if recOut['валюта'] == 'руб.':
                 csvWriterRUR.writerow(recOut)
             elif (recOut['валюта'] == 'USD') or (recOut['валюта'] == ''):
                 csvWriterUSD.writerow(recOut)
@@ -209,12 +163,11 @@ def download( cfg ):
     retCode     = False
     filename_new= cfg.get('download','filename_new')
     filename_old= cfg.get('download','filename_old')
-    filename_in= cfg.get('basic','filename_in')
-    filename_out= cfg.get('basic','filename_out')
-#    login       = cfg.get('download','login'    )
-#    password    = cfg.get('download','password' )
-    url_lk      = cfg.get('download','url_lk'   )
-#    url_file    = cfg.get('download','url_file' )
+    filename_in = cfg.get('basic','filename_in')
+#   login       = cfg.get('download','login'    )
+#   password    = cfg.get('download','password' )
+    url_base    = cfg.get('download','url_base'   )
+    url_file    = cfg.get('download','url_file' )
 
     download_path= os.path.join(os.getcwd(), 'tmp')
     if not os.path.exists(download_path):
@@ -228,7 +181,7 @@ def download( cfg ):
     try:
         ffprofile = webdriver.FirefoxProfile()
         ffprofile.set_preference("browser.download.dir", download_path)
-        ffprofile.set_preference("browser.download.folderList",2);
+        ffprofile.set_preference("browser.download.folderList",2)
         ffprofile.set_preference("browser.helperApps.neverAsk.saveToDisk", 
                 ",application/octet-stream" + 
                 ",application/vnd.ms-excel" + 
@@ -290,19 +243,18 @@ def download( cfg ):
             driver = webdriver.Firefox(ffprofile, executable_path=r'/usr/local/bin/geckodriver')
         elif os.name == 'nt':
             driver = webdriver.Firefox(ffprofile)
-        driver.implicitly_wait(30)
+        driver.implicitly_wait(10)
+        driver.set_page_load_timeout(10)
         
-#       driver.get(url_lk)
-        driver.get("https://snk-s.ru/DevPartnerCommon/DownloadFile/17132")
-        time.sleep(14)
-#       driver.find_element_by_xpath("//div[@id='master-wrapper-content']/div[2]/div/div[2]/div/div[2]/div[3]/a/span[2]").click()
-#       time.sleep(14)
-        driver.find_element_by_xpath("//div[@id='master-wrapper-content']/div[2]/div/div[2]/div/div/div[3]/a/span[2]").click()
-        time.sleep(4)
-        driver.quit()
+        driver.get(url_base)
+        try:
+            driver.get(url_file)
+        except Exception as e:
+            log.debug('Exception: <' + str(e) + '>')
 
     except Exception as e:
         log.debug('Exception: <' + str(e) + '>')
+    driver.quit()
 
     dir_afte_download = set(os.listdir(download_path))
     new_files = list( dir_afte_download.difference(dir_befo_download))
@@ -321,7 +273,16 @@ def download( cfg ):
         log.info( 'Скачанный файл ' +new_file + ' имеет дату ' + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(new_file_date) ) )
         
         print(new_ext)
-        if new_ext == '.zip':  
+        if new_ext in ('.xls','.xlsx','.xlsb','.xlsm','.csv'):
+            if os.path.exists( filename_new) and os.path.exists( filename_old):
+                os.remove( filename_old)
+                os.rename( filename_new, filename_old)
+            if os.path.exists( filename_new) :
+                os.rename( filename_new, filename_old)
+            shutil.copy2( DnewFile, filename_new)
+            retCode= True
+
+        elif new_ext == '.zip':
             # ветка устаревшая, не проверялась                                      # Архив. Обработка не завершена
             log.debug( 'Zip-архив. Разархивируем.')
             work_dir = os.getcwd()                                                  
@@ -353,16 +314,6 @@ def download( cfg ):
                 log.debug( 'Нет новых файлов после разархивации. Загляни в папку юниттеста поставщика.')
                 retCode=False
     return retCode
-    if filename_new[-4:] == '.zip':                                # Архив. Обработка не завершена
-        log.debug( 'Zip-архив. Разархивируем '+ filename_new)
-        filename_in= cfg.get('basic','filename_in')
-        if os.path.exists(filename_in): os.remove( filename_in)
-        dir_befo_unzip = set(os.listdir(os.getcwd()))
-        os.system('unzip -oj ' + filename_new)
-        dir_afte_unzip = set(os.listdir(os.getcwd()))
-        new_files  = list( dir_afte_unzip.difference(dir_befo_unzip))
-        os.rename( new_files[0], filename_in)
-    return True
 
 
 
@@ -410,20 +361,22 @@ def main(dealerName):
     """
     make_loger()
     log.info('          ' + dealerName)
-
+    '''
     if  os.path.exists('getting.cfg'):
         cfg = config_read('getting.cfg')
-        filename_new = cfg.get('basic','filename_new')
-
-        rc_download = False
         if cfg.has_section('download'):
             rc_download = download(cfg)
+            filename_new = cfg.get('download','filename_new')
+        else :
+            rc_download = False
+            filename_new = cfg.get('basic', 'filename_in')
         if not(rc_download==True or is_file_fresh( filename_new, int(cfg.get('basic','срок годности')) + 1)):
             return False
-
+    '''
     for cfgFName in os.listdir("."):
         if cfgFName.startswith("cfg") and cfgFName.endswith(".cfg"):
             cfg = config_read(cfgFName)
+            os.system('snk-sintez_converter_xlsx.xlsm')
             convert2csv(cfg)
 
 
