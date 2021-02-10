@@ -361,7 +361,7 @@ def main(dealerName):
     """
     make_loger()
     log.info('          ' + dealerName)
-    '''
+
     if  os.path.exists('getting.cfg'):
         cfg = config_read('getting.cfg')
         if cfg.has_section('download'):
@@ -372,7 +372,7 @@ def main(dealerName):
             filename_new = cfg.get('basic', 'filename_in')
         if not(rc_download==True or is_file_fresh( filename_new, int(cfg.get('basic','срок годности')) + 1)):
             return False
-    '''
+
     for cfgFName in os.listdir("."):
         if cfgFName.startswith("cfg") and cfgFName.endswith(".cfg"):
             cfg = config_read(cfgFName)
